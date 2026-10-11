@@ -1,7 +1,5 @@
-import { redactTranscriptText } from "../agents/transcript-redact-text.js";
 import { publishTranscriptUpdate } from "../config/sessions/session-accessor.sqlite-events.js";
 import { rewritePreparedTranscriptMessageAtAnchor } from "../config/sessions/session-message-rewrite.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { isUserMessage, readModelPromptProjection } from "./user-turn-transcript.message.js";
 import {
   normalizePersistedSteerTargetRunId,
@@ -50,7 +48,6 @@ export async function capturePersistedModelPromptProjection(params: {
   message: PersistedUserTurnMessage;
   text: string;
   requestLocal?: boolean;
-  config?: OpenClawConfig;
   assertCurrent: () => void;
   assertWritable: () => void;
   onCommitted: (
@@ -59,12 +56,12 @@ export async function capturePersistedModelPromptProjection(params: {
   ) => void;
 }): Promise<PersistedUserTurnMessage> {
   params.assertCurrent();
-  const text = redactTranscriptText(params.text, params.config);
+  const text = params.text;
   const projected = (candidate: PersistedUserTurnMessage): PersistedUserTurnMessage => ({
     ...candidate,
     __openclaw: { ...candidate["__openclaw"], modelPromptProjection: { version: 1, text } },
   });
-  // Request-local text crosses the provider boundary under the same redaction, never durably.
+  // Request-local text reaches the provider without changing durable history.
   if (params.requestLocal) {
     return projected(params.message);
   }
