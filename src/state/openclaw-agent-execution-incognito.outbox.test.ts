@@ -179,7 +179,6 @@ describe("outbox", () => {
         store.enqueueIntent({
           admission: turn.boundary.admission,
           engineId,
-          isHeartbeat: false,
         }),
       ).rejects.toThrow("No incognito session owner");
       expect(sql.queries).toEqual([]);

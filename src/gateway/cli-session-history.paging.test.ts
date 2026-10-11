@@ -457,11 +457,7 @@ it.each([
           ),
           native("native-question", `${prefix}${events}real question`, 3_001),
           native("native-unmatched", `${prefix}${events}only in the native file`, 4_000),
-          native(
-            "native-exec",
-            `${events}${LEGACY_EXEC_EVENT_PROMPT}`,
-            5_000,
-          ),
+          native("native-exec", `${events}${LEGACY_EXEC_EVENT_PROMPT}`, 5_000),
         ].join("\n"),
       );
       const database = openOpenClawAgentDatabase({ agentId: "main", env: state.env });
