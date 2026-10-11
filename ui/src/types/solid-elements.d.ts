@@ -5,6 +5,7 @@ import type WaTabGroup from "@awesome.me/webawesome/dist/components/tab-group/ta
 import type WaTabPanel from "@awesome.me/webawesome/dist/components/tab-panel/tab-panel.js";
 import type WaTab from "@awesome.me/webawesome/dist/components/tab/tab.js";
 import type { JSX } from "@solidjs/web";
+import type { ApplicationGateway } from "../app/gateway.ts";
 import type { MascotMood } from "../components/mascot-pose.ts";
 export type { JSX } from "@solidjs/web";
 
@@ -39,6 +40,10 @@ declare module "@solidjs/web" {
         "prop:measureSize": () => number;
         onResize: (event: CustomEvent<{ splitRatio: number }>) => void;
         "onResize-end": () => void;
+      };
+      "openclaw-cron-scratch-editor": HTMLAttributes<HTMLElement> & {
+        "prop:jobId": string;
+        "prop:gateway": ApplicationGateway | null;
       };
       "openclaw-tooltip": HTMLAttributes<HTMLElementTagNameMap["openclaw-tooltip"]> & {
         "prop:content"?: string;
