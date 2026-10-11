@@ -225,7 +225,8 @@ export function readPluginSdkSurfaceBudgets(env: NodeJS.ProcessEnv = process.env
       // resolveCommandAuthorization, createApproverRestrictedNativeApprovalCapability,
       // createChannelApprovalNativeRuntimeAdapter, and createLazyChannelApprovalNativeRuntimeAdapter.
       // +7: approved GitHub publication V2 requester/action contracts: five types and two preparers.
-      3668,
+      // +1: shared stale-read cache replaces board, preview, search, and credential cache policies.
+      3669,
       env,
     ),
     publicFunctionExports: readPluginSdkSurfaceBudgetEnv(
@@ -244,7 +245,8 @@ export function readPluginSdkSurfaceBudgets(env: NodeJS.ProcessEnv = process.env
       // +1: runWithLocalStateMutationOwner shares the existing transport authority scope.
       // +5: the five awaited inspection, authorization, and approval factory replacements above.
       // +2: prepareGitHubPublicationRequesterV2 and preparePersonalGitHubSessionActionV2.
-      2129,
+      // +1: the same bounded stale-read cache factory on collection-runtime.
+      2130,
       env,
     ),
     publicDeprecatedExports: readPluginSdkSurfaceBudgetEnv(
