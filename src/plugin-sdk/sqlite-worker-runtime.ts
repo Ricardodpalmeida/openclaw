@@ -20,10 +20,11 @@ export {
   publishSqliteDatabaseAdmission,
   type SqliteDatabaseAdmissionKey,
 } from "../infra/sqlite-database-admission.js";
-export { admitSqliteSchema } from "../infra/sqlite-schema-facts.js";
+export { admitSqliteSchema, getAdmittedSqliteSchemaFacts } from "../infra/sqlite-schema-facts.js";
 export {
   assertTransactionUsable,
   runSqliteDeferredTransactionSync,
+  runSqliteReadSnapshotSync,
   runSqliteImmediateTransactionSync,
 } from "../infra/sqlite-transaction.js";
 export type {
@@ -34,3 +35,6 @@ export type {
 export { requestSqliteWorkerOperationAdmission } from "../infra/sqlite-worker-operation-admission.js";
 export { withSqlitePostCommitPublications } from "../infra/sqlite-post-commit.js";
 export { tableExists } from "../state/openclaw-state-db-schema-helpers.js";
+
+export type { SqlConnection } from "../infra/sql-connection.js";
+export { PostgresSyncConnection } from "../infra/postgres-sync/connection.js";
