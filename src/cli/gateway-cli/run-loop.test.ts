@@ -1135,7 +1135,7 @@ describe("runGatewayLoop", () => {
       expect(acquireGatewayLock).toHaveBeenCalledTimes(2);
       expect(start).toHaveBeenCalledTimes(1);
       expect(gatewayLog.error).toHaveBeenCalledWith(
-        "failed to reacquire gateway lock for in-process restart: Error: lock timeout",
+        "failed to reacquire gateway lock for in-process restart: lock timeout",
       );
     });
   });

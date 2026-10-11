@@ -372,7 +372,10 @@ it.skipIf(process.platform !== "linux")(
               throw new Error(`Restart lost persisted session ${sessionKey}`);
             }
             const entry: unknown = JSON.parse(row.entry_json);
-            expect(entry).toMatchObject({
+            expect(
+              entry,
+              `Restart recovery entry for ${sessionKey}: ${JSON.stringify(entry)}\n${instance.logs()}`,
+            ).toMatchObject({
               status: "interrupted",
               abortedLastRun: true,
               mainRestartRecovery: {

@@ -61,6 +61,10 @@ describe("cron edit", () => {
     [["--command-input", ""], { payload: { kind: "command", input: "" } }],
     [["--script-timeout-seconds", "20"], { payload: { kind: "script", timeoutSeconds: 20 } }],
     [["--name", "Renamed"], { name: "Renamed" }],
+    [
+      ["--session", "main", "--message", "resume"],
+      { sessionTarget: "main", payload: { kind: "agentTurn", message: "resume" } },
+    ],
   ] as const)("sends only the requested patch for %j", async (args, patch) => {
     await edit(args);
     expectPatch(patch);
@@ -73,7 +77,7 @@ describe("cron edit", () => {
     ],
     [["--trigger-script", "", "--clear-trigger"], "--trigger-script must not be blank"],
     [["--script", " ", "--pacing-min", "30m"], "--script must not be blank"],
-    [["--session", "main", "--message", "resume"], 'sessionTarget "main" requires'],
+    [["--session", "main", "--command", '["true"]'], 'sessionTarget "main" requires'],
     [
       ["--session", "current", "--system-event", "resume"],
       'sessionTarget "current" cannot run systemEvent: systemEvent only runs in the main session',
@@ -120,8 +124,8 @@ describe("cron edit", () => {
   it.each([
     [["--enable", "--disable"], "Choose --enable or --disable, not both"],
     [
-      ["--session", "main", "--message", "resume"],
-      'cron sessionTarget "main" requires payload.kind="systemEvent" or "script"; agent turns use "isolated", "current", or "session:<key>"',
+      ["--session", "main", "--command", '["true"]'],
+      'cron sessionTarget "main" requires payload.kind="systemEvent", "agentTurn", or "script"',
     ],
   ])("keeps edit guidance for %j in JSON mode before RPC", async (args, message) => {
     const argv = process.argv;

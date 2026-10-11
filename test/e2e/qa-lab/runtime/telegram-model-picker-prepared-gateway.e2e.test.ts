@@ -1135,6 +1135,8 @@ test("recovers a replaced model catalog and drains the following Telegram callba
                 status: "completed",
               })),
             });
+        } catch (error) {
+          throw new Error(`${String(error)}\n${gateway.output()}`, { cause: error });
         } finally {
           await settleCleanup(gateway.close);
         }
