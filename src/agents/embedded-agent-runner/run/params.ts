@@ -324,6 +324,7 @@ export type EmbeddedForegroundPromptContext = Pick<
   | "disableMessageTool"
   | "conversationRecall"
   | "toolOverrides"
+  | "webSearchProvider"
   | "permissionMode"
   | "execOverrides"
   | "skillsSnapshot"

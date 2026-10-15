@@ -84,6 +84,7 @@ export function createWebSearchTool(options?: {
   sandboxed?: boolean;
   runtimeWebSearch?: RuntimeWebSearchMetadata;
   lateBindRuntimeConfig?: boolean;
+  webSearchProvider?: string;
 }): AnyAgentTool | null {
   if (options?.enabled === false || isWebSearchDisabled(options?.config)) {
     return null;
@@ -100,19 +101,27 @@ export function createWebSearchTool(options?: {
     execute: async (_toolCallId, args, signal) => {
       // Late binding lets long-lived agents pick up runtime web-search credentials/config without
       // rebuilding the tool object.
-      const {
-        config,
-        preferRuntimeProviders,
-        providerSelectionId,
-        runtimeMetadata: runtimeWebSearch,
-      } = resolveWebToolRuntimeContext({
+      const runtimeContext = resolveWebToolRuntimeContext({
         kind: "search",
         config: options?.config,
         lateBindRuntimeConfig: options?.lateBindRuntimeConfig,
         runtimeMetadata: options?.runtimeWebSearch,
       });
+      const { preferRuntimeProviders } = runtimeContext;
+      let { config, providerSelectionId, runtimeMetadata: runtimeWebSearch } = runtimeContext;
       if (isWebSearchDisabled(config)) {
         throw new Error("web_search is disabled.");
+      }
+      if (options?.webSearchProvider !== undefined) {
+        const { resolveWebSearchProviderForRun } =
+          await import("../../secrets/runtime-command-secrets.js");
+        const scoped = await resolveWebSearchProviderForRun({
+          config: config ?? {},
+          providerId: options.webSearchProvider,
+        });
+        config = scoped.config;
+        runtimeWebSearch = scoped.runtimeWebSearch;
+        providerSelectionId = scoped.providerId;
       }
       if (providerSelectionId) {
         assertSecretOwnerAvailable(
@@ -123,6 +132,8 @@ export function createWebSearchTool(options?: {
       const toolArgs = asToolParamsRecord(args);
       const result = await runWebSearch({
         config,
+        providerId: options?.webSearchProvider !== undefined ? providerSelectionId : undefined,
+        preferInputConfig: options?.webSearchProvider !== undefined,
         agentDir: options?.agentDir,
         sandboxed: options?.sandboxed,
         runtimeWebSearch,

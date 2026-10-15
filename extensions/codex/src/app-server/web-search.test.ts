@@ -2,6 +2,23 @@ import { describe, expect, it } from "vitest";
 import { resolveCodexWebSearchPlan } from "./web-search.js";
 
 describe("resolveCodexWebSearchPlan", () => {
+  it("keeps a managed run separate from the native chat thread configuration", () => {
+    const config = { tools: { web: { search: { openaiCodex: { enabled: true } } } } };
+    const runConfig = {
+      ...config,
+      tools: { web: { search: { ...config.tools.web.search, provider: "brave" } } },
+    };
+    expect(resolveCodexWebSearchPlan({ config: runConfig })).toMatchObject({
+      kind: "managed",
+      suppressManagedWebSearch: false,
+      threadConfig: { web_search: "disabled" },
+    });
+    expect(resolveCodexWebSearchPlan({ config })).toMatchObject({
+      kind: "native-hosted",
+      suppressManagedWebSearch: true,
+      threadConfig: { web_search: "cached" },
+    });
+  });
   it("uses Codex hosted web search by default when no managed provider is selected", () => {
     expect(resolveCodexWebSearchPlan({})).toEqual({
       kind: "native-hosted",
