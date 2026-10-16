@@ -37,10 +37,11 @@ vi.mock("../../plugins/web-search-providers.runtime.js", async (importOriginal) 
   const actual =
     await importOriginal<typeof import("../../plugins/web-search-providers.runtime.js")>();
   return {
+    ...actual,
     resolveRuntimeWebSearchProviders: providers,
-    resolvePluginWebSearchProviders: actual.resolvePluginWebSearchProviders,
   };
 });
+// mock-isolation: This suite owns provider discovery and must not enter the shared bundled-discovery lifecycle.
 vi.mock("../../plugins/bundled-discovery-state.js", () => ({
   prepareBundledDiscoveryMode: async () => () => {},
   readBundledDiscoveryModeMemoized: () => undefined,
