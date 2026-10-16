@@ -133,7 +133,10 @@ describe("isolated cron webSearchProvider at the managed tool boundary", () => {
       const run = runEmbeddedAgentMock.mock.calls[0]?.[0];
       expect(run).toBeDefined();
       expect(run.webSearchProvider).toBe("brave");
-      // Exercise the actual second admission boundary, not just the mocked cron lease.
+      expect(acquirePreparedModelRuntimeMock.mock.calls[0]?.[0].runtimePluginSelections).toEqual(
+        expect.arrayContaining([expect.objectContaining({ webSearchProvider: "brave" })]),
+      );
+      // Exercise config rebinding; real registry admission is covered by runtime-plugins.web-search.integration.test.ts.
       const preparation = acquirePreparedModelRuntimeMock.mock.results[0];
       if (preparation?.type !== "return") {
         throw new Error("Expected a prepared runtime lease");

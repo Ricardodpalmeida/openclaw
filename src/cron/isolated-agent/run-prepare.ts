@@ -437,9 +437,13 @@ export async function prepareCronRunContext(params: {
               entry: cronSession.sessionEntry,
               cfg: cfgWithAgentDefaults,
             });
-            return runtime
-              ? { provider: candidate.provider, modelId: candidate.model, runtime, agentId }
-              : { provider: candidate.provider, modelId: candidate.model, agentId };
+            return Object.assign(
+              { provider: candidate.provider, modelId: candidate.model, agentId },
+              runtime ? { runtime } : {},
+              input.job.payload.kind === "agentTurn" && input.job.payload.webSearchProvider
+                ? { webSearchProvider: input.job.payload.webSearchProvider.trim().toLowerCase() }
+                : {},
+            );
           }),
         },
         {
