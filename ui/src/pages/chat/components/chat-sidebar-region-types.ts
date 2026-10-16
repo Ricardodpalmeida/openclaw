@@ -15,7 +15,7 @@ export type SidebarPanelDefinition = {
   shortcut?: KeyboardShortcutCombo;
   available: boolean;
   content: LegacyTemplateResult | LegacyDirectiveResult | typeof emptyLegacyContent | null;
-  loading: LegacyTemplateResult;
+  loading: LegacyTemplateResult | LegacyDirectiveResult;
   headerAction?: LegacyTemplateResult | LegacyDirectiveResult;
   headerLink?: { href: string; label: string };
   empty: {
@@ -36,7 +36,9 @@ export type SidebarRegionCallbacks = {
 
 export type RegionProps = {
   panelIdPrefix: string;
-  conversationTab?: Pick<SidebarPanelDefinition, "label" | "icon">;
+  conversationTab?: Pick<SidebarPanelDefinition, "label"> & {
+    icon: LegacyTemplateResult | LegacyDirectiveResult;
+  };
   layout: SidebarLayout;
   panelDefinitions: SidebarPanelDefinition[];
   fetchFavicon?: LinkFaviconFetcher;
