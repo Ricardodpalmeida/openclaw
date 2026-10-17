@@ -20,6 +20,7 @@ import { projectGateway } from "../../lib/reactive/application.ts";
 import { useOptionalApplication } from "../../lib/reactive/context.ts";
 import { projectChannels, projectRuntimeConfig } from "../../lib/reactive/domain-capabilities.ts";
 import { t } from "../../lib/reactive/i18n.ts";
+import { listen } from "../../lib/reactive/listener.ts";
 import { projectSource } from "../../lib/reactive/projection.ts";
 import { resolveScrollBehavior } from "../../lib/scroll-behavior.ts";
 import { importNostrProfile, parseValidationErrors, putNostrProfile } from "./nostr-profile-ops.ts";
@@ -88,6 +89,7 @@ function createChannelsPage(getContext: () => ApplicationContext) {
   const configProjection = projectRuntimeConfig(initialContext.runtimeConfig);
   const settings = projectSource(initialContext.theme, {
     read: () => loadSettings().showAdvancedSettings === true,
+    // The projection owns theme observation for the persisted advanced-settings preference.
     subscribe: (theme, notify) => theme?.subscribe(notify) ?? (() => {}),
     equality: "revision",
   });
@@ -95,7 +97,7 @@ function createChannelsPage(getContext: () => ApplicationContext) {
   const pluginPresentation = createChannelPluginPresentation({
     getContext,
     getChannelIds: () => resolveChannelOrder(channelsProjection.read().channelsSnapshot),
-    isConnected: () => active,
+    isConnected: () => active && getContext().gateway.snapshot.phase === "connected",
   });
 
   const wizardHost = createChannelSetup({
@@ -106,6 +108,8 @@ function createChannelsPage(getContext: () => ApplicationContext) {
   let schemaLoadStarted = false;
   let channelsSource: ApplicationContext["channels"] | undefined;
   let gatewayPairingAuthSignature: string | null = null;
+  let canManagePairing = false;
+  let canAdmin = false;
   const connection = createGatewayConnectionLifecycle({ client: null, phase: "stopped" });
 
   function handleGatewaySnapshot(source: ApplicationContext["gateway"]) {
@@ -122,25 +126,40 @@ function createChannelsPage(getContext: () => ApplicationContext) {
     }
     currentGateway = source;
     currentClient = snapshot.client;
-    const pairingAccess = hasOperatorPairingAccess(snapshot.hello?.auth ?? null);
-    const pairingAuthSignature = resolveChannelPairingAuthSignature(snapshot);
+    const connected = snapshot.phase === "connected";
+    const pairingAccess = connected
+      ? hasOperatorPairingAccess(snapshot.hello?.auth ?? null)
+      : canManagePairing;
+    const adminAccess = connected ? hasOperatorAdminAccess(snapshot.hello?.auth ?? null) : canAdmin;
+    const pairingAuthSignature = connected
+      ? resolveChannelPairingAuthSignature(snapshot)
+      : gatewayPairingAuthSignature;
     const pairingAuthChanged = !initial && gatewayPairingAuthSignature !== pairingAuthSignature;
-    if (identityChanged || snapshot.phase !== "connected") {
+    if (identityChanged || (connected && !adminAccess)) {
       clearNostrForm();
+    } else if (transportChanged && operations.form) {
+      updateOperations({ form: { ...operations.form, saving: false, importing: false } });
     }
-    if (identityChanged || transportChanged || snapshot.phase !== "connected") {
+    if (identityChanged) {
       pluginPresentation.reset();
+    } else if (transportChanged) {
+      pluginPresentation.invalidateRequests();
     }
-    if (identityChanged || pairingAuthChanged || snapshot.phase !== "connected" || !pairingAccess) {
+    if (identityChanged || pairingAuthChanged || (connected && !pairingAccess)) {
       updateOperations({ prompt: null });
       setPairingFilter(null, null);
       setPairingNotice(null);
     }
     gatewayPairingAuthSignature = pairingAuthSignature;
+    canManagePairing = !identityChanged || connected ? pairingAccess : false;
+    canAdmin = !identityChanged || connected ? adminAccess : false;
     syncPairingPolling();
     if (snapshot.phase === "connected" && snapshot.client) {
       if (!initial) {
         ensureInitialData();
+      }
+      if (!initial && (identityChanged || transportChanged)) {
+        void getContext().channels.refresh(false);
       }
       if (
         !initial &&
@@ -537,14 +556,9 @@ function createChannelsPage(getContext: () => ApplicationContext) {
   function viewProps(): ChannelsProps {
     operationState.read();
     gatewayProjection.read();
-    channelsProjection.read();
-    configProjection.read();
+    const channels = channelsProjection.read();
+    const config = configProjection.read().state;
     const context = getContext();
-    const channels = context.channels.state;
-    const config = context.runtimeConfig.state;
-    const auth = context.gateway.snapshot.hello?.auth ?? null;
-    const canManagePairing = hasOperatorPairingAccess(auth);
-    const canAdmin = hasOperatorAdminAccess(auth);
     return {
       channels,
       config,
@@ -566,7 +580,7 @@ function createChannelsPage(getContext: () => ApplicationContext) {
       onShowDetail: setSelectedChannel,
       onCloseDetail: () => setSelectedChannel(null),
       onStartSetup: (channelId) => {
-        if (canAdmin) {
+        if (canAdmin && context.gateway.snapshot.phase === "connected") {
           wizardHost.startSetup(channelId);
         }
       },
@@ -601,7 +615,7 @@ function createChannelsPage(getContext: () => ApplicationContext) {
         editNostrForm((form) => ({ ...form, showAdvanced: !form.showAdvanced })),
     };
   }
-
+  // Rebind Gateway, channel, config, and theme subscriptions together when their context changes.
   createEffect(getContext, (context) =>
     untrack(() => {
       // Subscription callbacks reconcile synchronous owner receipts; their reads do not subscribe.
@@ -610,6 +624,7 @@ function createChannelsPage(getContext: () => ApplicationContext) {
       configProjection.replaceSource(context.runtimeConfig);
       settings.replaceSource(context.theme);
       const applyGateway = () => handleGatewaySnapshot(context.gateway);
+      // Gateway receipts retire profile operations, pairing prompts, and polling before connection or access changes settle.
       const stopGateway = gatewayProjection.subscribe(applyGateway);
       applyGateway();
       if (channelsSource && channelsSource !== context.channels) {
@@ -623,6 +638,7 @@ function createChannelsPage(getContext: () => ApplicationContext) {
         reconcilePairingFilter(context.channels.state.pairingSnapshot);
         pluginPresentation.ensure(context.gateway.snapshot.client);
       };
+      // Channel receipts reconcile pairing selections and start presentation loads as channel identities arrive.
       const stopChannels = channelsProjection.subscribe(applyChannels);
       applyChannels();
       schemaLoadStarted = false;
@@ -631,6 +647,7 @@ function createChannelsPage(getContext: () => ApplicationContext) {
           ensureInitialData();
         }
       };
+      // Configuration completion receipts drive the initial channel and schema loading state machine.
       const stopConfig = configProjection.subscribe(applyConfig);
       applyConfig();
       return () => {
@@ -640,11 +657,9 @@ function createChannelsPage(getContext: () => ApplicationContext) {
       };
     }),
   );
+  // Scroll the pairing section only after its requested DOM has committed.
   createEffect(pairingScrollPending, afterRender);
-  onSettled(() => {
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  });
+  onSettled(() => listen(document, "visibilitychange", handleVisibilityChange));
   onCleanup(() => {
     active = false;
     if (pairingTimer !== null) {
