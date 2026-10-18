@@ -246,6 +246,12 @@ discarding your edits. Switching identities or losing access still clears the
 affected settings. These drafts are not persisted by this behavior: reloading
 or closing the tab can discard them, including entered credentials.
 
+Rejected model-default saves return the pickers to the saved configuration.
+**Retry** keeps the rejected change with the configuration write owner. Model
+edits that have not been sent still survive a temporary disconnect. After
+reconnecting, defaults remain unavailable until the current configuration loads;
+a failed read does not present the previous connection's defaults as current.
+
 Unsent configuration form edits resume autosave after reconnect only when a
 fresh read confirms that their base revision is unchanged. If a submission was
 in flight or the revision changed, autosave stays paused for explicit recovery.
@@ -253,11 +259,21 @@ Raw configuration edits remain manual-save-only. Reconnect does not replay
 plugin installations, setup answers, or other arbitrary actions.
 
 Once a session is established, a dropped Gateway connection does not log you out. The dashboard
-stays visible, and one connection status in its sidebar footer explains whether the Gateway is
-suspending, suspended, restarting, reconnecting, or finishing recovery. Planned transitions and
-automatic reconnect use a calm presentation; authentication and other failures that need your
-attention keep their explanation and recovery action. The same status appears in the macOS app's
-embedded dashboard. Connection status does not replace the Gateway name in the account menu.
+stays visible. The sidebar avatar has a green connection dot when healthy, amber during recovery
+or suspension, and red when disconnected or a refresh is required. The sidebar footer
+explains the interruption without moving the page and briefly shows **Connected** after recovery.
+With the sidebar collapsed, a flag beside the avatar appears for four seconds on status changes.
+Hover or focus the avatar to reopen it. If the flag would cover a composer or other writing
+controls, the avatar tooltip carries the status instead. The tooltip is hidden while the flag is visible.
+On mobile, status replaces the header breadcrumb and badges the menu button; opening the drawer
+shows the full footer row. Brief disconnects keep the existing two-second grace.
+
+The status includes the number of queued messages and **Retry** when an immediate connection
+attempt is available. Hover or focus for the redacted connection error. Settings keeps its save feedback
+visible alongside connection status. One persistent shell region announces connection changes,
+even while the mobile drawer is closed. Native embedded views keep their own connection
+chrome, including the status in the embedded Settings header. Connection status does not replace
+the Gateway name in the account menu.
 
 The client retries ordinary connection loss automatically with randomized backoff: the first
 retry waits 800–960 ms, and sustained failures spread retries across 12.5–15 seconds.
