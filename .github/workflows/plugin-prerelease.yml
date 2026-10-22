@@ -928,6 +928,7 @@ jobs:
           path: .artifacts/plugin-inspector/**
           if-no-files-found: warn
 
+          retention-days: 14
   plugin-prerelease-docker-suite:
     name: plugin-prerelease-docker-suite
     needs: [resolve_target, preflight]

@@ -6281,6 +6281,7 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
 
+          retention-days: 14
       - *runner_memory_peak_step
 
   pr-fail-fast:

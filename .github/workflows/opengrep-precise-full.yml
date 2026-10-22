@@ -89,4 +89,4 @@ jobs:
           name: opengrep-full-sarif
           path: .opengrep-out/precise.sarif
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14

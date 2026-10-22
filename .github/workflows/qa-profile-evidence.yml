@@ -1075,7 +1075,7 @@ jobs:
         with:
           name: qa-profile-diagnostics-${{ needs.plan_qa_profile.outputs.profile }}-${{ needs.validate_selected_ref.outputs.selected_revision }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ github.workspace }}/selected/.artifacts/qa-e2e/profile-${{ needs.plan_qa_profile.outputs.profile }}-${{ github.run_id }}-${{ github.run_attempt }}/qa-profile-run-status.json
-          retention-days: 30
+          retention-days: 14
           if-no-files-found: warn
 
       - name: Warn if QA profile diagnostics were not retained
@@ -1088,7 +1088,7 @@ jobs:
         with:
           name: qa-profile-evidence-${{ needs.plan_qa_profile.outputs.profile }}-${{ needs.validate_selected_ref.outputs.selected_revision }}
           path: ${{ steps.aggregate.outputs.output_dir }}
-          retention-days: 30
+          retention-days: 14
           if-no-files-found: error
 
       - name: Fail if QA profile failed

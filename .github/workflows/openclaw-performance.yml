@@ -731,7 +731,7 @@ jobs:
             .artifacts/kova/bundles/${{ matrix.lane }}
             .artifacts/kova/summaries/${{ matrix.lane }}.md
           if-no-files-found: error
-          retention-days: ${{ matrix.deep_profile == 'true' && 14 || 30 }}
+          retention-days: 14
 
       - name: Report Kova artifact transport retry
         if: ${{ always() && steps.lane.outputs.run == 'true' && steps.upload_kova_artifacts.outcome == 'failure' }}
@@ -747,7 +747,7 @@ jobs:
             .artifacts/kova/bundles/${{ matrix.lane }}
             .artifacts/kova/summaries/${{ matrix.lane }}.md
           if-no-files-found: error
-          retention-days: ${{ matrix.deep_profile == 'true' && 14 || 30 }}
+          retention-days: 14
           overwrite: true
 
   source_performance:
@@ -1094,7 +1094,7 @@ jobs:
           name: openclaw-performance-source-${{ github.run_id }}-${{ github.run_attempt }}
           path: .artifacts/openclaw-performance/source
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
 
       - name: Report source performance artifact transport retry
         if: ${{ always() && steps.upload_source_performance_artifacts.outcome == 'failure' }}
@@ -1107,7 +1107,7 @@ jobs:
           name: openclaw-performance-source-${{ github.run_id }}-${{ github.run_attempt }}
           path: .artifacts/openclaw-performance/source
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
           overwrite: true
 
   publish:
@@ -1860,7 +1860,7 @@ jobs:
           name: vitest-pair-${{ github.run_id }}-${{ github.run_attempt }}
           path: .artifacts/vitest-pair/results
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
 
   vitest_pair_guard:
     name: Verify Vitest pair isolation

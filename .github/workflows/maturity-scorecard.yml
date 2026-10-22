@@ -726,7 +726,7 @@ jobs:
         with:
           name: maturity-scorecard-docs-${{ github.run_id }}-${{ github.run_attempt }}
           path: .artifacts/maturity-docs/
-          retention-days: 30
+          retention-days: 14
           if-no-files-found: error
 
   publish_generated_pr:
