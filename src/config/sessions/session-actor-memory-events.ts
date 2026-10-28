@@ -1,13 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { asOptionalRecord, isRecord } from "@openclaw/normalization-core/record-coerce";
+import { parseCompactionDetails } from "../../../packages/agent-core/src/harness/compaction/compaction-details.js";
 import { iterateSessionContextEntries } from "../../../packages/agent-core/src/harness/session/session.js";
-import { advanceCliHistoryBoundary, getCliHistoryWriter } from "./cli-history-boundary.js";
+import {
+  advanceCliHistoryBoundary,
+  cliHistoryOwnerHolds,
+  getCliHistoryWriter,
+} from "./cli-history-boundary.js";
 import type { TranscriptEventAppendOptions } from "./session-accessor.sqlite-contract.js";
+import { pruneSessionActorMemoryReactions } from "./session-actor-memory-reactions.js";
 import type { SessionActorMemoryState } from "./session-actor-memory-state.js";
 import { isIndexedSessionEntry } from "./session-entry-codec.js";
 import { normalizeSessionContextEntryBoundaries } from "./session-entry-navigation.js";
 import type { SessionMetadataOperations } from "./session-manager-write-contract.js";
 import { SqliteTranscriptMutationConflictError } from "./session-mutation-conflict-error.js";
+import { rewriteSessionPriorWorkspaceBoundary } from "./session-prior-workspace-boundary.js";
 import {
   hasTranscriptMessage,
   shouldProjectActiveEvent,
@@ -112,7 +119,11 @@ export function createSessionActorMemoryEvents(options: {
     const rawSeq = (state.hot.transcript.version.rawSeq ?? -1) + 1;
     const generation = state.hot.transcript.version.generation ?? randomUUID();
     state.events = [...state.events, { rawSeq, event: JSON.parse(eventJson), eventJson }];
-    state.hot.transcript.version = { generation, rawSeq, updatedAt: Date.now() };
+    state.hot.transcript.version = {
+      generation,
+      rawSeq,
+      updatedAt: Math.max(Date.now(), (state.hot.transcript.version.updatedAt ?? -1) + 1),
+    };
     state.hot.transcript.watermark = { generation, maxSeq: rawSeq };
     const writer = getCliHistoryWriter({
       agentId,
@@ -130,7 +141,9 @@ export function createSessionActorMemoryEvents(options: {
       );
       if (next) {
         writer.assertCurrent();
-        state.hot.entry = next;
+        if (cliHistoryOwnerHolds(writer, writer.confirmsOwner)) {
+          state.hot.entry = next;
+        }
       }
     }
     if (isRecord(event) && typeof event.id === "string" && event.type === "message") {
@@ -145,6 +158,14 @@ export function createSessionActorMemoryEvents(options: {
           { key, eventId: event.id, rawSeq },
         ];
       }
+    }
+    if (
+      isRecord(event) &&
+      event.type === "compaction" &&
+      parseCompactionDetails(event.details)?.qualityDegraded &&
+      !requireEntry().compactionQualityDegraded
+    ) {
+      state.hot.entry = { ...requireEntry(), compactionQualityDegraded: true };
     }
     refresh();
     return true;
@@ -242,5 +263,63 @@ export function createSessionActorMemoryEvents(options: {
         }
       : { appended: false as const };
   };
-  return { version, tree, writeEvent, parent, checkMutation, rebasePrepared, appendRaw };
+  const replaceRows = (
+    rows: SessionActorMemoryState["events"],
+    replacement?: { preserveGeneration?: boolean },
+  ) => {
+    const generation = replacement?.preserveGeneration
+      ? state.hot.transcript.version.generation
+      : randomUUID();
+    const updatedAt = Math.max(Date.now(), (state.hot.transcript.version.updatedAt ?? -1) + 1);
+    const entry = requireEntry();
+    if (entry.priorWorkspace) {
+      state.hot.entry = rewriteSessionPriorWorkspaceBoundary(
+        entry,
+        state.hot.transcript.version.generation,
+        generation,
+        {
+          previous: state.events.map((row) => ({
+            id: isRecord(row.event) && typeof row.event.id === "string" ? row.event.id : null,
+            seq: row.rawSeq,
+          })),
+          next: rows.map((row) => ({
+            id: isRecord(row.event) && typeof row.event.id === "string" ? row.event.id : null,
+            seq: row.rawSeq,
+            message: hasTranscriptMessage(row.event),
+          })),
+          unchangedBeforeSeq: 0,
+        },
+      );
+    }
+    state.events = rows;
+    pruneSessionActorMemoryReactions(state);
+    state.hot.transcript.version = { generation, rawSeq: rows.at(-1)?.rawSeq ?? null, updatedAt };
+    state.hot.transcript.watermark = { generation, maxSeq: rows.at(-1)?.rawSeq ?? null };
+    const identities = new Map<string, { key: string; eventId: string; rawSeq: number }>();
+    for (const row of rows) {
+      if (
+        !isRecord(row.event) ||
+        row.event.type !== "message" ||
+        typeof row.event.id !== "string"
+      ) {
+        continue;
+      }
+      const key = readMessageIdempotencyKey(row.event.message);
+      if (key) {
+        identities.set(key, { key, eventId: row.event.id, rawSeq: row.rawSeq });
+      }
+    }
+    state.hot.transcript.idempotency = [...identities.values()];
+    refresh();
+  };
+  return {
+    version,
+    tree,
+    writeEvent,
+    parent,
+    checkMutation,
+    rebasePrepared,
+    appendRaw,
+    replaceRows,
+  };
 }

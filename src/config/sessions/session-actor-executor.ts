@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { SqliteWorkerError } from "../../infra/sqlite-worker-contract.js";
+import { wrapSqliteWorkerError } from "../../infra/sqlite-worker-contract.js";
 import { freezeJsonSnapshot } from "../../shared/immutable-data.js";
 import type {
   SessionActor,
   SessionActorAuthority,
+  SessionActorAuthorityFacts,
   SessionActorCommandContext,
   SessionActorCommitObserver,
   SessionActorHotState,
@@ -14,6 +15,7 @@ import type {
   SessionActorPhaseResults,
   SessionActorReducer,
   SessionActorTarget,
+  SessionActorStorage,
 } from "./session-actor-contract.js";
 
 export type SessionActorExecutorGuards = {
@@ -24,7 +26,9 @@ export type SessionActorExecutorGuards = {
 
 /** A backend settles commands and publishes complete state before returning. */
 export type SessionActorExecutor = {
+  storage?: SessionActorStorage;
   snapshot(authority: SessionActorAuthority): SessionActorHotState | undefined;
+  snapshotEntry(authority: SessionActorAuthority): SessionActorAuthorityFacts | undefined;
   read(authority: SessionActorAuthority): Promise<SessionActorHotState>;
   command<Phase extends SessionActorPhase>(
     phase: Phase,
@@ -41,7 +45,7 @@ type PhaseState = {
   active: boolean;
   reducers: SessionActorReducer[];
   pending: Set<Promise<unknown>>;
-  uncertain: boolean;
+  uncertain: Extract<SessionActorOutcome<unknown>, { kind: "unknown" }>["error"] | undefined;
 };
 
 /** Shared admission, accepted-work drainage, and phase batching for every backend. */
@@ -69,6 +73,7 @@ export function createSessionActorWithExecutor(params: {
     }
   };
   const executor = params.createExecutor({ target, assertAccepted, assertReadable });
+  const storage = executor.storage;
   const retain = <T>(operation: () => Promise<T>, phase?: PhaseState): Promise<T> => {
     if (phase) {
       assertAccepted();
@@ -88,6 +93,8 @@ export function createSessionActorWithExecutor(params: {
       phase?.pending.delete(promise);
     };
     void promise.then(settled, settled);
+    // Keep dispatch in this try and convert operation() throws to rejections:
+    // adoptRun restores cleanup custody on synchronous throws because no write has started.
     try {
       const work = executor.retain ? executor.retain(operation) : operation();
       void work.then(retained.resolve, retained.reject);
@@ -108,12 +115,20 @@ export function createSessionActorWithExecutor(params: {
       throw new Error("Session actor command belongs to another phase");
     }
     return retain(async () => {
-      const reducers = phase?.reducers.splice(0) ?? [];
-      captured.reducers = [...reducers, ...(captured.reducers ?? [])];
+      const reducers = phase?.reducers.length ? phase.reducers.splice(0) : undefined;
+      if (reducers) {
+        captured.reducers = captured.reducers?.length
+          ? reducers.concat(captured.reducers)
+          : reducers;
+      }
       const outcome = await executor.command(name, captured, authority, observer);
       if (phase && outcome.kind === "unknown") {
-        phase.uncertain = true;
-      } else if (phase && (outcome.kind === "rolled-back" || outcome.kind === "stale-version")) {
+        phase.uncertain ??= outcome.error;
+      } else if (
+        phase &&
+        reducers &&
+        (outcome.kind === "rolled-back" || outcome.kind === "stale-version")
+      ) {
         phase.reducers.unshift(...reducers);
       }
       return outcome;
@@ -133,9 +148,30 @@ export function createSessionActorWithExecutor(params: {
   };
   const bind = (phase?: PhaseState): SessionActor => ({
     target,
+    ...(storage
+      ? {
+          storage: {
+            acquire(sessionKey, lifetime) {
+              return storage.acquire(sessionKey, lifetime);
+            },
+            readCurrent(query, authority) {
+              return storage.readCurrent(query, authority);
+            },
+            read(query, authority) {
+              const captured = structuredClone(query);
+              return retain(() => storage.read(captured, authority), phase);
+            },
+            mutate(mutation, authority, observer) {
+              const captured = structuredClone(mutation);
+              return retain(() => storage.mutate(captured, authority, observer), phase);
+            },
+          } satisfies SessionActorStorage,
+        }
+      : {}),
     assertCurrent,
     assertReadable,
     snapshot: (authority) => executor.snapshot(authority),
+    snapshotEntry: (authority) => executor.snapshotEntry(authority),
     release: releaseActor,
     read: (authority) => retain(() => executor.read(authority), phase),
     acceptInput: (input, authority, observer) =>
@@ -160,7 +196,7 @@ export function createSessionActorWithExecutor(params: {
           active: true,
           reducers: [],
           pending: new Set(),
-          uncertain: false,
+          uncertain: undefined,
         };
         const actor = bind(held);
         const failures: unknown[] = [];
@@ -187,9 +223,10 @@ export function createSessionActorWithExecutor(params: {
             await Promise.allSettled(held.pending);
           }
           if (held.uncertain) {
-            throw new SqliteWorkerError(
+            throw wrapSqliteWorkerError(
               "Session actor phase has an unknown outcome; reconcile without replay",
               "outcome-unknown",
+              held.uncertain,
             );
           }
           while (held.reducers.length) {
@@ -205,9 +242,10 @@ export function createSessionActorWithExecutor(params: {
               held,
             );
             if (settled.kind !== "committed") {
-              throw new SqliteWorkerError(
+              throw wrapSqliteWorkerError(
                 settled.error.message,
                 settled.kind === "unknown" ? "outcome-unknown" : "unavailable",
+                settled.error,
               );
             }
           }
